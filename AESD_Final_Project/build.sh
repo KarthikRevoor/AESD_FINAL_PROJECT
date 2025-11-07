@@ -2,9 +2,26 @@
 set -e
 TOPDIR=$(dirname "$(realpath "$0")")
 
-#Use external tree (renamed from base_external to mnet_external)
+# Use external tree (renamed from base_external to mnet_external)
 export BR2_EXTERNAL="${TOPDIR}/mnet_external"
+BUILDROOT_DIR="${TOPDIR}/buildroot"
 
-#Configure Buildroot for Raspberry Pi 4 (64-bit) and build
-make -C "${TOPDIR}/buildroot" O="${TOPDIR}/buildroot/output" raspberrypi4_64_defconfig
-make -C "${TOPDIR}/buildroot" O="${TOPDIR}/buildroot/output" -j"$(nproc)"
+# Step 1: Apply default config only if .config doesn’t exist
+if [ ! -f "${BUILDROOT_DIR}/.config" ]; then
+    echo "[INFO] No existing Buildroot config found. Applying default defconfig..."
+    make -C "${BUILDROOT_DIR}" raspberrypi4_64_defconfig
+fi
+
+# Step 2: Ensure MNET stays enabled
+if ! grep -q "BR2_PACKAGE_MNET=y" "${BUILDROOT_DIR}/.config" 2>/dev/null; then
+    echo "[INFO] Enabling MNET external package..."
+    echo "BR2_PACKAGE_MNET=y" >> "${BUILDROOT_DIR}/.config"
+    make -C "${BUILDROOT_DIR}" olddefconfig
+fi
+
+# Step 3: Build
+echo "[INFO] Starting Buildroot build..."
+make -C "${BUILDROOT_DIR}" -j"$(nproc)"
+
+echo "[INFO] Build completed successfully!"
+

@@ -1,0 +1,6 @@
+config BR2_PACKAGE_MNET
+    bool "mnet Ethernet driver"
+    help
+      A minimal Linux Ethernet driver (registers net_device 'mnet0')
+      Implements ndo_open/stop/start_xmit hooks and TX/RX stats.
+

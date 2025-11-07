@@ -1,2 +1,4 @@
 menu "mnet external options"
+source "$BR2_EXTERNAL_MNET_EXTERNAL_PATH/package/mnet/Config.in"
 endmenu
+

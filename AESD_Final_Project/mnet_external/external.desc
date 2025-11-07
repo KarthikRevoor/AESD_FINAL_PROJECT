@@ -1,2 +1,2 @@
-name: mnet
-desc: External tree for Two-RPi mnet demo
+name: MNET_EXTERNAL
+desc: Custom Ethernet driver external tree
