@@ -1,5 +1,4 @@
-# final-project-KaifShahidShaikh
-final-project-KaifShahidShaikh created by GitHub Classroom
+# final-project-ETHENET DRIVER
 
 Project Overview  
 [View Full Project Overview (Wiki)](https://github.com/KarthikRevoor/AESD_FINAL_PROJECT/wiki)
