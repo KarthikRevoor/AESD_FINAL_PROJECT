@@ -1,4 +1,5 @@
 menu "mnet external options"
 source "$BR2_EXTERNAL_MNET_EXTERNAL_PATH/package/mnet/Config.in"
+source "$BR2_EXTERNAL_MNET_EXTERNAL_PATH/package/bme280/Config.in"
 endmenu
 

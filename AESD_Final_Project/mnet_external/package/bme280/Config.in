@@ -1,0 +1,3 @@
+config BR2_PACKAGE_BME280_DRIVER
+    bool "Kaif's BME280 kernel driver"
+
