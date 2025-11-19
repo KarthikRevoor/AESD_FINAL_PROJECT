@@ -19,6 +19,13 @@ if ! grep -q "BR2_PACKAGE_MNET=y" "${BUILDROOT_DIR}/.config" 2>/dev/null; then
     make -C "${BUILDROOT_DIR}" olddefconfig
 fi
 
+# Step 2.5: Ensure BME280 stays enabled
+if ! grep -q "BR2_PACKAGE_BME280=y" "${BUILDROOT_DIR}/.config" 2>/dev/null; then
+    echo "[INFO] Enabling BME280 driver external package..."
+    echo "BR2_PACKAGE_BME280=y" >> "${BUILDROOT_DIR}/.config"
+    make -C "${BUILDROOT_DIR}" olddefconfig
+fi
+
 # Step 3: Build
 echo "[INFO] Starting Buildroot build..."
 make -C "${BUILDROOT_DIR}" -j"$(nproc)"

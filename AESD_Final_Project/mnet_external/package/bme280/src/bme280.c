@@ -7,7 +7,6 @@
 #include <linux/sysfs.h>
 #include <linux/slab.h>
 #include <linux/kernel.h>
-#include <linux/stdlib.h>
 
 #include "bme280.h"
 
@@ -376,11 +375,11 @@ static int bme280_probe(struct i2c_client *client,
 	return 0;
 }
 
-static int bme280_remove(struct i2c_client *client)
+static void bme280_remove(struct i2c_client *client)
 {
-	sysfs_remove_group(&client->dev.kobj, &bme280_attr_group);
-	return 0;
+    sysfs_remove_group(&client->dev.kobj, &bme280_attr_group);
 }
+
 
 /* -------------------------------------------------------------------------- */
 /* I2C tables                                                                 */

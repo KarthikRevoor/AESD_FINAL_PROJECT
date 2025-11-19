@@ -42,7 +42,7 @@ struct bme280_calib {
 struct bme280_data {
     struct i2c_client   *client;
     struct bme280_calib calib;
-    s32                 *t_fine;
+    s32                 t_fine;
     struct mutex        lock;      /* protect accesses */
 };
 
