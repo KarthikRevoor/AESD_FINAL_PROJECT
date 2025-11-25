@@ -6,6 +6,10 @@ TOPDIR=$(dirname "$(realpath "$0")")
 export BR2_EXTERNAL="${TOPDIR}/mnet_external"
 BUILDROOT_DIR="${TOPDIR}/buildroot"
 
+echo "[INFO] Cleaning MNET and BME280 build directories..."
+make -C "${BUILDROOT_DIR}" mnet-dirclean || true
+make -C "${BUILDROOT_DIR}" bme280-dirclean || true
+
 # Step 1: Apply default config only if .config doesn’t exist
 if [ ! -f "${BUILDROOT_DIR}/.config" ]; then
     echo "[INFO] No existing Buildroot config found. Applying default defconfig..."

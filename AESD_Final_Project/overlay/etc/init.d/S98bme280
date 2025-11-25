@@ -45,14 +45,18 @@ case "$1" in
             PRINT "S98: ERROR: new_device node missing!"
         fi
       # --- LOAD MNET DRIVER ---
-        PRINT "S98: Loading mnet driver..."
-        modprobe mnet 2>/dev/null
+    PRINT "S98: Bringing up eth0..."
+    ip link set eth0 up 2>/dev/null
+    ip link set eth0 promisc on 2>/dev/null
 
-        if [ $? -eq 0 ]; then
-            PRINT "S98: mnet driver loaded successfully."
-        else
-            PRINT "S98: ERROR: Failed to load mnet driver!"
-        fi
+    PRINT "S98: Loading mnet driver..."
+    modprobe mnet 2>/dev/null
+
+    PRINT "S98: Bringing up mnet0..."
+    ip link set mnet0 up 2>/dev/null
+    ip link set mnet0 promisc on 2>/dev/null
+
+    PRINT "S98: Network interfaces ready."
 
         ;;
     stop)
