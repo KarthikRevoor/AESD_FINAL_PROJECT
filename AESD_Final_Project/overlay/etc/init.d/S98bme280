@@ -1,0 +1,66 @@
+#!/bin/sh
+# S98bme280: Load BME280 driver only after I2C bus is ready
+
+# Print to both possible consoles
+PRINT() {
+    echo "$1" > /dev/tty1 2>/dev/null
+}
+
+PRINT "S98: BME280 & mnet init script starting..."
+
+case "$1" in
+    start)
+        PRINT "S98: Loading I2C kernel modules first..."
+
+        # --- LOAD I2C MODULES BEFORE CHECKING BUS ---
+        modprobe i2c-dev 2>/dev/null
+        modprobe i2c_bcm2835 2>/dev/null
+        PRINT "S98: I2C modules loaded."
+
+        PRINT "S98: Checking for I2C bus /dev/i2c-1..."
+
+        # --- WAIT UNTIL I2C BUS IS READY ---
+        COUNT=0
+        while [ ! -e /dev/i2c-1 ]; do
+            PRINT "S98: /dev/i2c-1 not ready, retry $COUNT"
+            sleep 1
+            COUNT=$((COUNT+1))
+            if [ $COUNT -gt 15 ]; then
+                PRINT "S98: ERROR: I2C bus never appeared!"
+                exit 1
+            fi
+        done
+
+        PRINT "S98: I2C bus detected."
+
+        # --- Load BME280 driver ---
+        modprobe bme280
+        PRINT "S98: bme280 module loaded"
+
+        # --- Register BME280 device ---
+        if [ -e /sys/bus/i2c/devices/i2c-1/new_device ]; then
+            echo bme280 0x76 > /sys/bus/i2c/devices/i2c-1/new_device
+            PRINT "S98: BME280 registered at 0x76"
+        else
+            PRINT "S98: ERROR: new_device node missing!"
+        fi
+      # --- LOAD MNET DRIVER ---
+        PRINT "S98: Loading mnet driver..."
+        modprobe mnet 2>/dev/null
+
+        if [ $? -eq 0 ]; then
+            PRINT "S98: mnet driver loaded successfully."
+        else
+            PRINT "S98: ERROR: Failed to load mnet driver!"
+        fi
+
+        ;;
+    stop)
+        PRINT "S98: Stopping drivers..."
+        echo 0x76 > /sys/bus/i2c/devices/i2c-1/delete_device 2>/dev/null
+        modprobe -r mnet 2>/dev/null
+        modprobe -r bme280 2>/dev/null
+        ;;
+esac
+
+exit 0

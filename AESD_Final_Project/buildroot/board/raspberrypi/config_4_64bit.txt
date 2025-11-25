@@ -30,5 +30,6 @@ dtparam=krnbt=on
 
 # enable 64bits support
 arm_64bit=1
-dtoverlay=bme280-overlay
+dtparam=i2c_arm=on
+
 
