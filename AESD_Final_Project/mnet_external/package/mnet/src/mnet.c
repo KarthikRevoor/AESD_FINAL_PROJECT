@@ -27,34 +27,51 @@ static struct net_device *mnet_dev;
 static struct dentry *mnet_debug_dir;
 static struct task_struct *mnet_kthread;
 
-
+/* =========================================================
+ * Parse custom frames (for receiver Pi)
+ * ========================================================= */
+/* =========================================================
+ * Parse custom frames (for receiver Pi)
+ * ========================================================= */
 static void mnet_process_rx(struct sk_buff *skb)
 {
     struct ethhdr *eh;
     char msg[128];
     int payload_len;
+    unsigned char *payload;
 
-    if (skb->len <= ETH_HLEN)
-        return;
-
+    /* * Get pointer to Ethernet header.
+     * Even though skb->data has moved, skb->mac_header is set, 
+     * so this macro correctly finds the header in the headroom.
+     */
     eh = eth_hdr(skb);
 
-    if (ntohs(eh->h_proto) != 0x88B5)
+    /* Verify it is our custom protocol */
+    if (eh->h_proto != htons(0x88B5))
         return;
 
-    payload_len = skb->len - ETH_HLEN;
-    if (payload_len <= 0 || payload_len > 120)
+    /* * FIX: The driver (eth0) has already called eth_type_trans(), which
+     * performs skb_pull(skb, ETH_HLEN).
+     * * Therefore:
+     * - skb->data ALREADY points to the payload.
+     * - skb->len is ALREADY the payload length.
+     * * We do NOT need to add ETH_HLEN again.
+     */
+    payload = skb->data;           
+    payload_len = skb->len;        
+
+    /* Safety check */
+    if (payload_len <= 0 || payload_len >= sizeof(msg))
         return;
 
-    memcpy(msg, skb->data + ETH_HLEN, payload_len);
-    msg[payload_len] = '\0';
+    memcpy(msg, payload, payload_len);
+    msg[payload_len] = '\0';       // Null-terminate
 
     pr_info("mnet RX: payload = %s\n", msg);
 }
-
 /* =========================================================
- *  RX Handler: Clone frames from eth0 → mnet0
- * =========================================================*/
+ * RX Handler from eth0 → mnet0
+ * ========================================================= */
 static rx_handler_result_t mnet_rx_handler(struct sk_buff **pskb)
 {
     struct sk_buff *skb = *pskb;
@@ -63,12 +80,11 @@ static rx_handler_result_t mnet_rx_handler(struct sk_buff **pskb)
     if (!mnet_dev)
         return RX_HANDLER_PASS;
 
+    mnet_process_rx(skb);  // CUSTOM PACKET CHECK
+
     clone = skb_clone(skb, GFP_ATOMIC);
     if (!clone)
         return RX_HANDLER_PASS;
-
-    /* Process clone */
-    mnet_process_rx(clone);
 
     clone->dev = mnet_dev;
     clone->protocol = eth_type_trans(clone, mnet_dev);
@@ -81,10 +97,9 @@ static rx_handler_result_t mnet_rx_handler(struct sk_buff **pskb)
     return RX_HANDLER_PASS;
 }
 
-
 /* =========================================================
- *  TX Handler: mnet0 → eth0
- * =========================================================*/
+ * TX Handler mnet0 → eth0
+ * ========================================================= */
 static netdev_tx_t mnet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 {
     struct mnet_priv *priv = netdev_priv(dev);
@@ -96,9 +111,7 @@ static netdev_tx_t mnet_start_xmit(struct sk_buff *skb, struct net_device *dev)
     if (real_dev && netif_running(real_dev)) {
         skb->dev = real_dev;
         dev_queue_xmit(skb);
-        pr_info("%s: TX via %s len=%d\n", dev->name, real_dev->name, skb->len);
     } else {
-        pr_warn("%s: eth0 not ready, dropping TX\n", dev->name);
         dev_kfree_skb(skb);
     }
 
@@ -106,14 +119,13 @@ static netdev_tx_t mnet_start_xmit(struct sk_buff *skb, struct net_device *dev)
 }
 
 /* =========================================================
- *  Open / Stop
- * =========================================================*/
+ * Open / Stop
+ * ========================================================= */
 static int mnet_open(struct net_device *dev)
 {
     struct mnet_priv *priv = netdev_priv(dev);
     napi_enable(&priv->napi);
     netif_start_queue(dev);
-    pr_info("%s: device opened\n", dev->name);
     return 0;
 }
 
@@ -122,13 +134,12 @@ static int mnet_stop(struct net_device *dev)
     struct mnet_priv *priv = netdev_priv(dev);
     napi_disable(&priv->napi);
     netif_stop_queue(dev);
-    pr_info("%s: device stopped\n", dev->name);
     return 0;
 }
 
 /* =========================================================
- *  Netdevice Setup
- * =========================================================*/
+ * Device Setup
+ * ========================================================= */
 static const struct net_device_ops mnet_netdev_ops = {
     .ndo_open       = mnet_open,
     .ndo_stop       = mnet_stop,
@@ -144,8 +155,8 @@ static void mnet_setup(struct net_device *dev)
 }
 
 /* =========================================================
- *  BME280 Temperature Reader (kernel space)
- * =========================================================*/
+ * BME280 Temperature Reader
+ * ========================================================= */
 static int read_bme280_temp(void)
 {
     struct file *f;
@@ -171,13 +182,15 @@ static int read_bme280_temp(void)
 }
 
 /* =========================================================
- *  Build and send custom Ethernet frame
- * =========================================================*/
+ * Construct and send custom Ethernet frame
+ * ========================================================= */
+
 static void mnet_send_temp_packet(int temp_mdegc)
 {
     struct sk_buff *skb;
-    unsigned char *data;
-    unsigned char dest_mac[6] = {0xff,0xff,0xff,0xff,0xff,0xff};
+    unsigned char dest_mac[ETH_ALEN] =
+            {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+
     char payload[64];
     int payload_len;
 
@@ -187,50 +200,46 @@ static void mnet_send_temp_packet(int temp_mdegc)
     if (!real_dev || !netif_running(real_dev))
         return;
 
-    /* Build payload */
     snprintf(payload, sizeof(payload), "TEMP=%d", temp_mdegc);
     payload_len = strlen(payload);
 
-    pr_info("mnet TX payload: %s\n", payload);   // <--- PRINT PAYLOAD HERE
-
-    skb = alloc_skb(ETH_HLEN + payload_len, GFP_KERNEL);
+    /* Allocate SKB with headroom for Ethernet header */
+    skb = alloc_skb(payload_len + ETH_HLEN + 2, GFP_KERNEL);
     if (!skb)
         return;
 
-    /* Payload */
-    skb_reserve(skb, ETH_HLEN);
-    data = skb_put(skb, payload_len);
-    memcpy(data, payload, payload_len);
+    skb_reserve(skb, ETH_HLEN);          // leave space for ethhdr
+    memcpy(skb_put(skb, payload_len), payload, payload_len);
 
-    /* Ethernet header */
+    /* Push Ethernet header */
     skb_push(skb, ETH_HLEN);
-    eth_hdr(skb)->h_proto = htons(0x88B5);  // custom EtherType
-    memcpy(eth_hdr(skb)->h_dest, dest_mac, ETH_ALEN);
-    memcpy(eth_hdr(skb)->h_source, real_dev->dev_addr, ETH_ALEN);
 
+    struct ethhdr *eh = (struct ethhdr *)skb->data;
+    memcpy(eh->h_dest, dest_mac, ETH_ALEN);
+    memcpy(eh->h_source, real_dev->dev_addr, ETH_ALEN);
+    eh->h_proto = htons(0x88B5);         // <-- CUSTOM ETHER TYPE
+
+    /* Tell kernel where this packet will go */
     skb->dev = real_dev;
-    skb->protocol = eth_hdr(skb)->h_proto;
+    skb->protocol = eh->h_proto;
     skb->ip_summed = CHECKSUM_NONE;
 
-    /* Print final TX frame (header + payload) */
-    print_hex_dump(KERN_INFO, "mnet TX FRAME: ", DUMP_PREFIX_NONE,
-                   16, 1, skb->data, skb_headlen(skb), true);   // <--- FRAME DUMP
+    pr_info("mnet: TX frame [%d bytes] %s\n",
+            payload_len, payload);
 
     dev_queue_xmit(skb);
 }
 
+
 /* =========================================================
- *  Kernel Sensor Thread (1 Hz)
- * =========================================================*/
+ * Sensor Thread (TX @ 1 Hz)
+ * ========================================================= */
 static int mnet_sensor_thread(void *data)
 {
     while (!kthread_should_stop()) {
-
         int temp = read_bme280_temp();
-        if (temp > 0) {
-            //pr_info("mnet: sending temp = %d mdegC\n", temp);
+        if (temp > 0)
             mnet_send_temp_packet(temp);
-        }
 
         msleep(1000);  // 1 Hz
     }
@@ -239,8 +248,8 @@ static int mnet_sensor_thread(void *data)
 }
 
 /* =========================================================
- *  Module Init
- * =========================================================*/
+ * Module Init
+ * ========================================================= */
 static int __init mnet_init(void)
 {
     int ret;
@@ -256,31 +265,21 @@ static int __init mnet_init(void)
     spin_lock_init(&priv->lock);
     netif_napi_add(mnet_dev, &priv->napi, NULL);
 
-    /* Bind to eth0 */
     eth_dev = dev_get_by_name(&init_net, "eth0");
-    if (!eth_dev) {
-        pr_err("%s: eth0 not found\n", DRV_NAME);
-        free_netdev(mnet_dev);
+    if (!eth_dev)
         return -ENODEV;
-    }
+
     priv->real_dev = eth_dev;
 
     rtnl_lock();
     ret = netdev_rx_handler_register(eth_dev, mnet_rx_handler, NULL);
     rtnl_unlock();
-    if (ret) {
-        dev_put(eth_dev);
-        free_netdev(mnet_dev);
+    if (ret)
         return ret;
-    }
 
     ret = register_netdev(mnet_dev);
-    if (ret) {
-        netdev_rx_handler_unregister(eth_dev);
-        dev_put(eth_dev);
-        free_netdev(mnet_dev);
+    if (ret)
         return ret;
-    }
 
     mnet_debug_dir = debugfs_create_dir("mnet", NULL);
     if (mnet_debug_dir) {
@@ -290,22 +289,14 @@ static int __init mnet_init(void)
                            (u32 *)&mnet_dev->stats.rx_packets);
     }
 
-    pr_info("%s: registered, bridging eth0 <-> %s\n",
-            DRV_NAME, mnet_dev->name);
-
-    /* Start sensor thread */
     mnet_kthread = kthread_run(mnet_sensor_thread, NULL, "mnet_temp_thread");
-    if (IS_ERR(mnet_kthread)) {
-        pr_err("mnet: Failed to start sensor thread\n");
-        mnet_kthread = NULL;
-    }
 
     return 0;
 }
 
 /* =========================================================
- *  Module Exit
- * =========================================================*/
+ * Module Exit
+ * ========================================================= */
 static void __exit mnet_exit(void)
 {
     struct mnet_priv *priv = netdev_priv(mnet_dev);
@@ -313,26 +304,20 @@ static void __exit mnet_exit(void)
     if (mnet_kthread)
         kthread_stop(mnet_kthread);
 
-    if (priv->real_dev) {
-        rtnl_lock();
-        netdev_rx_handler_unregister(priv->real_dev);
-        rtnl_unlock();
-        dev_put(priv->real_dev);
-    }
+    rtnl_lock();
+    netdev_rx_handler_unregister(priv->real_dev);
+    rtnl_unlock();
 
     debugfs_remove_recursive(mnet_debug_dir);
     unregister_netdev(mnet_dev);
     free_netdev(mnet_dev);
-
-    pr_info("%s: module unloaded\n", DRV_NAME);
 }
-
 
 module_init(mnet_init);
 module_exit(mnet_exit);
 
 MODULE_AUTHOR("Karthik Revoor");
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("AESD Final Project - MNET Ethernet Bridge Driver + Sensor TX (1Hz)");
-MODULE_VERSION("3.3");
+MODULE_DESCRIPTION("AESD Final Project - MNET Ethernet Bridge + Sensor TX/RX");
+MODULE_VERSION("3.4");
 
