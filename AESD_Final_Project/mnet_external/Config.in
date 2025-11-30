@@ -1,5 +1,10 @@
 menu "mnet external options"
 source "$BR2_EXTERNAL_MNET_EXTERNAL_PATH/package/mnet/Config.in"
 source "$BR2_EXTERNAL_MNET_EXTERNAL_PATH/package/bme280/Config.in"
+source "$BR2_EXTERNAL_MNET_EXTERNAL_PATH/package/python-rpi-epd2in7/Config.in"
+source "$BR2_EXTERNAL_MNET_EXTERNAL_PATH/package/gpiozero/Config.in"
+source "$BR2_EXTERNAL_MNET_EXTERNAL_PATH/package/colourzero/Config.in"
+source "$BR2_EXTERNAL_MNET_EXTERNAL_PATH/package/lcd_1602/Config.in"
+
 endmenu
 

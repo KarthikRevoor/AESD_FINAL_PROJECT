@@ -6,10 +6,20 @@ PRINT() {
     echo "$1" > /dev/tty1 2>/dev/null
 }
 
-PRINT "S98: BME280 & mnet init script starting..."
+PRINT "S98: BME280 & mnet (and LCD) init script starting..."
 
 case "$1" in
     start)
+    
+        # Ensure debugfs is mounted (needed for /sys/kernel/debug/mnet)
+        if ! grep -q "debugfs /sys/kernel/debug" /proc/mounts 2>/dev/null; then
+            PRINT "S98: mounting debugfs at /sys/kernel/debug..."
+            mkdir -p /sys/kernel/debug
+            mount -t debugfs debugfs /sys/kernel/debug || PRINT "S98: ERROR: debugfs mount failed!"
+        else
+            PRINT "S98: debugfs already mounted."
+        fi
+
         PRINT "S98: Loading I2C kernel modules first..."
 
         # --- LOAD I2C MODULES BEFORE CHECKING BUS ---
@@ -44,23 +54,40 @@ case "$1" in
         else
             PRINT "S98: ERROR: new_device node missing!"
         fi
-      # --- LOAD MNET DRIVER ---
-    PRINT "S98: Bringing up eth0..."
-    ip link set eth0 up 2>/dev/null
-    ip link set eth0 promisc on 2>/dev/null
 
-    PRINT "S98: Loading mnet driver..."
-    modprobe mnet 2>/dev/null
+        ################################################################
+        # LCD INIT (userspace, same style: try and continue either way)
+        ################################################################
+        PRINT "S98: Initializing LCD (if present)..."
 
-    PRINT "S98: Bringing up mnet0..."
-    ip link set mnet0 up 2>/dev/null
-    ip link set mnet0 promisc on 2>/dev/null
+        if [ -x /usr/bin/lcd_1602 ]; then
+            PRINT "S98: Starting lcd_1602 userspace app..."
+            /usr/bin/lcd_1602 &
+        else
+            PRINT "S98: WARNING: /usr/bin/lcd_1602 not found, skipping LCD init"
+        fi
 
-    PRINT "S98: Network interfaces ready."
+        # --- LOAD MNET DRIVER ---
+        PRINT "S98: Bringing up eth0..."
+        ip link set eth0 up 2>/dev/null
+        ip link set eth0 promisc on 2>/dev/null
+
+        PRINT "S98: Loading mnet driver..."
+        modprobe mnet 2>/dev/null
+
+        PRINT "S98: Bringing up mnet0..."
+        ip link set mnet0 up 2>/dev/null
+        ip link set mnet0 promisc on 2>/dev/null
+
+        PRINT "S98: Network interfaces ready."
 
         ;;
     stop)
-        PRINT "S98: Stopping drivers..."
+        PRINT "S98: Stopping drivers and LCD app..."
+
+        # Stop LCD userspace app (if running)
+        killall lcd_1602 2>/dev/null
+
         echo 0x76 > /sys/bus/i2c/devices/i2c-1/delete_device 2>/dev/null
         modprobe -r mnet 2>/dev/null
         modprobe -r bme280 2>/dev/null
@@ -68,3 +95,4 @@ case "$1" in
 esac
 
 exit 0
+

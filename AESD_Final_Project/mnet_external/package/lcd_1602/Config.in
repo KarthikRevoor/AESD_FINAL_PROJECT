@@ -1,0 +1,6 @@
+config BR2_PACKAGE_LCD_1602
+    bool "lcd_1602 userspace app"
+    help
+      Userspace app that reads BME280 temp and mnet stats
+      and displays them on a 1602 I2C LCD.
+

@@ -26,6 +26,7 @@ struct mnet_priv {
 static struct net_device *mnet_dev;
 static struct dentry *mnet_debug_dir;
 static struct task_struct *mnet_kthread;
+static int mnet_last_temp_mdegc = 0;
 
 /* =========================================================
  * Parse custom frames (for receiver Pi)
@@ -67,7 +68,14 @@ static void mnet_process_rx(struct sk_buff *skb)
     memcpy(msg, payload, payload_len);
     msg[payload_len] = '\0';       // Null-terminate
 
-    pr_info("mnet RX: payload = %s\n", msg);
+   // pr_info("mnet RX: payload = %s\n", msg);
+     {
+        int t;
+        if (sscanf(msg, "TEMP=%d", &t) == 1) {
+            mnet_last_temp_mdegc = t;
+            // pr_info("mnet RX: parsed TEMP=%d mdegC\n", mnet_last_temp_mdegc);
+        }
+    }
 }
 /* =========================================================
  * RX Handler from eth0 → mnet0
@@ -224,8 +232,7 @@ static void mnet_send_temp_packet(int temp_mdegc)
     skb->protocol = eh->h_proto;
     skb->ip_summed = CHECKSUM_NONE;
 
-    pr_info("mnet: TX frame [%d bytes] %s\n",
-            payload_len, payload);
+    pr_info("mnet: TX frame [%d bytes] %s\n",payload_len, payload);
 
     dev_queue_xmit(skb);
 }
@@ -287,6 +294,8 @@ static int __init mnet_init(void)
                            (u32 *)&mnet_dev->stats.tx_packets);
         debugfs_create_u32("rx_packets", 0444, mnet_debug_dir,
                            (u32 *)&mnet_dev->stats.rx_packets);
+        debugfs_create_u32("temp_mdegc_rx", 0444, mnet_debug_dir,
+                       (u32 *)&mnet_last_temp_mdegc);
     }
 
     mnet_kthread = kthread_run(mnet_sensor_thread, NULL, "mnet_temp_thread");
