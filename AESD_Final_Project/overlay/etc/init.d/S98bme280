@@ -1,7 +1,5 @@
 #!/bin/sh
-# S98bme280: Load BME280 driver only after I2C bus is ready
 
-# Print to both possible consoles
 PRINT() {
     echo "$1" > /dev/tty1 2>/dev/null
 }
@@ -11,7 +9,6 @@ PRINT "S98: BME280 & mnet (and LCD) init script starting..."
 case "$1" in
     start)
     
-        # Ensure debugfs is mounted (needed for /sys/kernel/debug/mnet)
         if ! grep -q "debugfs /sys/kernel/debug" /proc/mounts 2>/dev/null; then
             PRINT "S98: mounting debugfs at /sys/kernel/debug..."
             mkdir -p /sys/kernel/debug
@@ -22,14 +19,12 @@ case "$1" in
 
         PRINT "S98: Loading I2C kernel modules first..."
 
-        # --- LOAD I2C MODULES BEFORE CHECKING BUS ---
         modprobe i2c-dev 2>/dev/null
         modprobe i2c_bcm2835 2>/dev/null
         PRINT "S98: I2C modules loaded."
 
         PRINT "S98: Checking for I2C bus /dev/i2c-1..."
 
-        # --- WAIT UNTIL I2C BUS IS READY ---
         COUNT=0
         while [ ! -e /dev/i2c-1 ]; do
             PRINT "S98: /dev/i2c-1 not ready, retry $COUNT"
@@ -43,11 +38,9 @@ case "$1" in
 
         PRINT "S98: I2C bus detected."
 
-        # --- Load BME280 driver ---
         modprobe bme280
         PRINT "S98: bme280 module loaded"
 
-        # --- Register BME280 device ---
         if [ -e /sys/bus/i2c/devices/i2c-1/new_device ]; then
             echo bme280 0x76 > /sys/bus/i2c/devices/i2c-1/new_device
             PRINT "S98: BME280 registered at 0x76"
@@ -67,7 +60,6 @@ case "$1" in
             PRINT "S98: WARNING: /usr/bin/lcd_1602 not found, skipping LCD init"
         fi
 
-        # --- LOAD MNET DRIVER ---
         PRINT "S98: Bringing up eth0..."
         ip link set eth0 up 2>/dev/null
         ip link set eth0 promisc on 2>/dev/null
@@ -85,7 +77,6 @@ case "$1" in
     stop)
         PRINT "S98: Stopping drivers and LCD app..."
 
-        # Stop LCD userspace app (if running)
         killall lcd_1602 2>/dev/null
 
         echo 0x76 > /sys/bus/i2c/devices/i2c-1/delete_device 2>/dev/null
