@@ -4,14 +4,13 @@
 #
 ##############################################################
 
-# Commit hash you want Buildroot to checkout
 BME280_VERSION = 8326d3a86655c5e66f45eac99740d8a433157836
 
 
 BME280_SITE = git@github.com:KarthikRevoor/mnet-apps.git
 
 BME280_SITE_METHOD = git
-# Set to YES only if repo contains submodules
+
 BME280_GIT_SUBMODULES = NO
 BME280_MODULE_SUBDIRS = bme280/src
 

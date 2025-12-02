@@ -5,12 +5,10 @@
 #
 ################################################################################
 
-# Commit in mnet-apps that contains display/src/lcd_1602.c
 LCD_1602_VERSION = a8e9dbc4d4f00e216eb14bd36c61f5bbea7e3a0d
 LCD_1602_SITE    = git@github.com:KarthikRevoor/mnet-apps.git
 LCD_1602_SITE_METHOD = git
 
-# Subdirectory inside the mnet-apps repo
 LCD_1602_SUBDIR = display/src
 
 define LCD_1602_BUILD_CMDS
