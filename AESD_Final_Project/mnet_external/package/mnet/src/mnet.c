@@ -20,7 +20,7 @@ struct mnet_priv {
     struct net_device_stats stats;
     spinlock_t lock;
     struct napi_struct napi;
-    struct net_device *real_dev;  // points to eth0
+    struct net_device *real_dev;
 };
 
 static struct net_device *mnet_dev;
@@ -31,9 +31,6 @@ static int mnet_last_temp_mdegc = 0;
 /* =========================================================
  * Parse custom frames (for receiver Pi)
  * ========================================================= */
-/* =========================================================
- * Parse custom frames (for receiver Pi)
- * ========================================================= */
 static void mnet_process_rx(struct sk_buff *skb)
 {
     struct ethhdr *eh;
@@ -41,23 +38,12 @@ static void mnet_process_rx(struct sk_buff *skb)
     int payload_len;
     unsigned char *payload;
 
-    /* * Get pointer to Ethernet header.
-     * Even though skb->data has moved, skb->mac_header is set, 
-     * so this macro correctly finds the header in the headroom.
-     */
     eh = eth_hdr(skb);
 
     /* Verify it is our custom protocol */
     if (eh->h_proto != htons(0x88B5))
         return;
 
-    /* * FIX: The driver (eth0) has already called eth_type_trans(), which
-     * performs skb_pull(skb, ETH_HLEN).
-     * * Therefore:
-     * - skb->data ALREADY points to the payload.
-     * - skb->len is ALREADY the payload length.
-     * * We do NOT need to add ETH_HLEN again.
-     */
     payload = skb->data;           
     payload_len = skb->len;        
 
@@ -66,7 +52,7 @@ static void mnet_process_rx(struct sk_buff *skb)
         return;
 
     memcpy(msg, payload, payload_len);
-    msg[payload_len] = '\0';       // Null-terminate
+    msg[payload_len] = '\0';  
 
    // pr_info("mnet RX: payload = %s\n", msg);
      {
@@ -88,7 +74,7 @@ static rx_handler_result_t mnet_rx_handler(struct sk_buff **pskb)
     if (!mnet_dev)
         return RX_HANDLER_PASS;
 
-    mnet_process_rx(skb);  // CUSTOM PACKET CHECK
+    mnet_process_rx(skb); 
 
     clone = skb_clone(skb, GFP_ATOMIC);
     if (!clone)
@@ -216,7 +202,7 @@ static void mnet_send_temp_packet(int temp_mdegc)
     if (!skb)
         return;
 
-    skb_reserve(skb, ETH_HLEN);          // leave space for ethhdr
+    skb_reserve(skb, ETH_HLEN);       
     memcpy(skb_put(skb, payload_len), payload, payload_len);
 
     /* Push Ethernet header */
@@ -225,7 +211,7 @@ static void mnet_send_temp_packet(int temp_mdegc)
     struct ethhdr *eh = (struct ethhdr *)skb->data;
     memcpy(eh->h_dest, dest_mac, ETH_ALEN);
     memcpy(eh->h_source, real_dev->dev_addr, ETH_ALEN);
-    eh->h_proto = htons(0x88B5);         // <-- CUSTOM ETHER TYPE
+    eh->h_proto = htons(0x88B5);        
 
     /* Tell kernel where this packet will go */
     skb->dev = real_dev;
